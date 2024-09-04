@@ -1,0 +1,21 @@
+
+
+
+{
+    "login": { 
+        "login_url": "https://login.microsoftonline.com/8aaca184-221f-48c0-84cb-3818905e6db0/saml2?SAMLRequest=hVPRbpswFP0V5D4bDDEpWCFV2qxbpHSLFjpVezPmklgydobN0vTrZ5IhdQ%2FN3qyrc%2B49557r2d1rq4Lf0FlpdIHikKAAtDC11LsCPZePOEOBdVzXXBkNBTqBRXfzmeWtOrBF7%2Fb6O%2FzqwbrAN9KWvaaEFKjvNDPcSss0b8EyJ9h28bRmSUjYoTONVL7Inetk1TtgL56ExgZWFmjv3IFF0fF4DI%2BT0HS7KCEkjl6e1luxh5ZjqQdRAkbWoOf6WG4tdM67HCne5oeDCI08yCNuRnRt5e4DOIlIPsAHyM17QYf%2FLsIZYRQKNn9f91JfFn%2BNVl1Aln0pyw3efNuWKHg0nYBzGgVquLJ%2BL0ufidTcnXMddFsvXJmd1GErRWesaZzRSmoIhWmjjHPB44ziJIkbTDNBcEZFhSdZnOUkhWldkWgwlaBgZW0Pq3MCrkAJSSgmGU5ISVIWpyxNf6Lgx3hSyXBSq2WBZI3bxeSt1J%2FNp1U6vYf4bQqbh%2Bq5Pa1TitHlqNi5eTc4arm7vomh4rs2Z6jP00l3QvPRq6yFxUnN85pCw3OoaJbmuUiBwy0nvGpuaZqFsr7wfJhcKBDK9PWwEEbpJGqgnkXvVI13%2F9UPXi03RklxChZKmeNDB9z57%2BG6HlA0v7D%2B%2FSDzPw%3D%3D&RelayState=vVBx&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256&Signature=IwNKsX9jvBl0tvjkhK%2BY%2BbCN1NYxKdoD7gQ3YCGDQUx4XmkBFfSwz97LgKPjaN%2B2XZWRuvFYdXGeY7YTaNApP%2F4z6d09eC13lcj%2BhKSx%2FGx6ootlnuSJ1%2FFdula1HgG9syUqWZmdoariH4Sz5cHe%2Bmo2kQxrOdSU2h3BtSrTv3CSoaB9qqighs9xKgxERJpvxj4zoLkPOkhPWbHCyTbYUJHKPmIwupR1DbnRrMY61MOTOzRgwmp812zM5Jry3u1HiMztF%2FWsE%2BeKXnfZ4k6o1U34gYXzOp3t%2BQdzqVtMD%2BrJ7XkFcpUfRMDZ9Uzx%2FHgeeK1Tkw5JFIeXlPRmrVa2rQ%3D%3D",
+        "username": "pprimavera@cpamericas.com",
+        "password": "Usuariodeprueba1*"
+    }, 
+
+
+
+
+    "postgres": {
+        "usuario": "postgres",
+        "contrasena": "panchis06",
+        "host": "localhost",
+        "puerto": "5432",
+        "db": "urls_cpa"
+    }
+}
