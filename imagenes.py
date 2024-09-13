@@ -7,9 +7,9 @@ import json
 with open('config.json', 'r') as config_file:
     config = json.load(config_file)
 
-login_url = config['login_url']
-username = config['username']
-password = config['password']
+login_url = config['login']['login_url']
+username = config['login']['username']
+password = config['login']['password']
 
 
 def extract_data():

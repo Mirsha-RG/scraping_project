@@ -22,6 +22,7 @@
 
 
     "data_columns": {
+        "primary_key.": "Record No.",
         "table_name": "tickets",
         "url_column": "Business Process Record URL",
         "image_base64_column": "image_base64"

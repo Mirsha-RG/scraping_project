@@ -3,17 +3,17 @@ import time
 import os
 import json
 import base64
-import psycopg2  # Asegúrate de tener instalado el módulo psycopg2 para conectarte a la base de datos
+import psycopg2  
 
 # Cargar la configuración del archivo JSON
 with open('config.json', 'r') as config_file:
     config = json.load(config_file)
 
-# Extraer la información del archivo de configuración
 login_url = config['login']['login_url']
 username = config['login']['username']
 password = config['login']['password']
 db_config = config['postgres']
+primary_key = config['data_columns']['primary_key.']
 table_name = config['data_columns']['table_name']
 url_column = config['data_columns']['url_column']
 image_base64_column = config['data_columns']['image_base64_column']
@@ -33,31 +33,41 @@ def connect_to_db():
         print(f"Error al conectar a la base de datos: {e}")
         return None
 
+# Guardar la imagen en la base de datos
+def save_image_to_db(connection, ticket_id, image_base64):
+    try:
+        with connection.cursor() as cursor:
+            print(f"Guardando la imagen en la base de datos para el ticket ID: {ticket_id}")
+            print(f"Contenido en Base64 a guardar: {image_base64[:100]}...")  # Imprime los primeros 100 caracteres para verificar
+
+            cursor.execute(
+                f'UPDATE "{table_name}" SET "{image_base64_column}" = %s WHERE "{primary_key}" = %s',
+                (image_base64, ticket_id)
+            )
+            connection.commit()
+            print(f"Imagen guardada en la base de datos para el ticket ID: {ticket_id}")
+    except Exception as e:
+        print(f"Error al guardar la imagen en la base de datos: {e}")
+        connection.rollback()
+
 # Obtener las URLs desde la base de datos
 def get_urls_from_db(connection):
     try:
         with connection.cursor() as cursor:
-            # Usar comillas dobles para nombres de columnas y tabla con espacios
-            cursor.execute(f'SELECT "{url_column}" FROM "{table_name}" WHERE "{image_base64_column}" IS NULL')
-            urls = cursor.fetchall()
-            return [url[0] for url in urls]
+            cursor.execute(f'SELECT "{primary_key}", "{url_column}" FROM "{table_name}" WHERE "{primary_key}" IS NOT NULL')
+            return cursor.fetchall()
     except Exception as e:
         print(f"Error al obtener URLs de la base de datos: {e}")
         return []
 
-# Guardar la imagen en base64 en la base de datos
-def save_image_to_db(connection, url, image_base64):
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(f'UPDATE "{table_name}" SET "{image_base64_column}" = %s WHERE "{url_column}" = %s', (image_base64, url))
-            connection.commit()
-            print(f"Imagen en Base64 guardada para la URL: {url}")
-    except Exception as e:
-        print(f"Error al guardar imagen en la base de datos: {e}")
+# Almacenar imágenes en una lista
+imagenes_por_ticket = []
 
 # Proceso de scraping y conversión de imágenes
-def process_url(connection, url):  # Pasamos la conexión como parámetro
+def process_url(connection, ticket_id, url):  # Pasar la conexión como argumento
     try:
+        print(f"Procesando la URL: {url}")
+        
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False)
             page = browser.new_page()
@@ -97,12 +107,15 @@ def process_url(connection, url):  # Pasamos la conexión como parámetro
             for frame in iframes:
                 record_no_element = frame.query_selector('input[id="oj-collapsible-2-contentrecord_no\\|input"]')
                 
-                if any([record_no_element]):
+                if record_no_element:
                     print("Elementos encontrados en un iframe.")
                     found = True
                     break
 
             if found:
+                # Inicializar la lista para almacenar imágenes
+                imagenes_por_ticket.clear()  # Limpiar la lista antes de almacenar nuevas imágenes
+
                 # Hacer scroll en la página para cargar más elementos e imágenes
                 frame.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 time.sleep(2)  # Esperar para que se carguen las imágenes al hacer scroll
@@ -114,11 +127,17 @@ def process_url(connection, url):  # Pasamos la conexión como parámetro
                         # Convertir imagen a Base64
                         img_data = img.screenshot()
                         image_base64 = base64.b64encode(img_data).decode('utf-8')
-                        save_image_to_db(connection, url, image_base64)
+                        imagenes_por_ticket.append((ticket_id, image_base64))  # Guardar imagen en la lista
+                        print(f"Imagen capturada y guardada en lista para el ticket ID: {ticket_id}")
+
                     except Exception as e:
                         print(f"Error al convertir o guardar la imagen en Base64: {e}")
 
-                print(f"Todas las imágenes se han procesado para la URL: {url}.")
+                # Guardar todas las imágenes en la base de datos
+                for ticket_id, image_base64 in imagenes_por_ticket:
+                    save_image_to_db(connection, ticket_id, image_base64)
+
+                print(f"Todas las imágenes se han procesado para el ticket ID: {ticket_id}.")
             
             else:
                 print("Uno o más elementos no fueron encontrados en el DOM.")
@@ -138,13 +157,14 @@ def main():
     while True:
         urls = get_urls_from_db(connection)
         if urls:
-            for url in urls:
-                process_url(connection, url)  # Pasar la conexión como argumento
+            for ticket_id, url in urls:
+                process_url(connection, ticket_id, url)  # Pasar la conexión a la función
         else:
             print("No se encontraron URLs para procesar.")
 
         # Esperar 5 minutos antes de la siguiente verificación
-        time.sleep(3000)  # Corregir tiempo de espera
+        time.sleep(30000)
 
 # Llamada a la función principal
 main()
+
