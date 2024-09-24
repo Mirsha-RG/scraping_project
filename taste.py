@@ -2,72 +2,18 @@ from playwright.sync_api import sync_playwright
 import time
 import os
 import json
-import base64
-import psycopg2  
 
-# Cargar la configuración del archivo JSON
 with open('config.json', 'r') as config_file:
     config = json.load(config_file)
 
 login_url = config['login']['login_url']
 username = config['login']['username']
 password = config['login']['password']
-db_config = config['postgres']
-primary_key = config['data_columns']['primary_key']
-table_name = config['data_columns']['table_name']
-url_column = config['data_columns']['url_column']
-image_base64_column = config['data_columns']['image_base64_column']
 
-# Conectar a la base de datos
-def connect_to_db():
+def extract_data():
     try:
-        connection = psycopg2.connect(
-            host=db_config['host'],
-            port=db_config['puerto'],
-            user=db_config['usuario'],
-            password=db_config['contrasena'],
-            dbname=db_config['db']
-        )
-        return connection
-    except Exception as e:
-        print(f"Error al conectar a la base de datos: {e}")
-        return None
+        data_page_url = input("Por favor, ingresa la URL de tu ticket: ")
 
-# Guardar la imagen en la base de datos
-def save_image_to_db(connection, ticket_id, image_base64):
-    try:
-        with connection.cursor() as cursor:
-            print(f"Guardando la imagen en la base de datos para el ticket ID: {ticket_id}")
-            print(f"Contenido en Base64 a guardar: {image_base64[:100]}...")  # Imprime los primeros 100 caracteres para verificar
-
-            cursor.execute(
-                f'UPDATE "{table_name}" SET "{image_base64_column}" = %s WHERE "{primary_key}" = %s',
-                (image_base64, ticket_id)
-            )
-            connection.commit()
-            print(f"Imagen guardada en la base de datos para el ticket ID: {ticket_id}")
-    except Exception as e:
-        print(f"Error al guardar la imagen en la base de datos: {e}")
-        connection.rollback()
-
-# Obtener las URLs desde la base de datos
-def get_urls_from_db(connection):
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(f'SELECT "{primary_key}", "{url_column}" FROM "{table_name}" WHERE "{primary_key}" IS NOT NULL')
-            return cursor.fetchall()
-    except Exception as e:
-        print(f"Error al obtener URLs de la base de datos: {e}")
-        return []
-
-# Almacenar imágenes en una lista
-imagenes_por_ticket = []
-
-# Proceso de scraping y conversión de imágenes
-def process_url(connection, ticket_id, url):  # Pasar la conexión como argumento
-    try:
-        print(f"Procesando la URL: {url}")
-        
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False)
             page = browser.new_page()
@@ -84,6 +30,45 @@ def process_url(connection, ticket_id, url):  # Pasar la conexión como argument
             page.fill('input[name="passwd"]', password)
             page.click('input[id="idSIButton9"]')
 
+            # Función para buscar elementos tanto en la página principal como en iframes
+            def find_and_click(selector, description, by_text=False):
+                try:
+                    print(f"Buscando {description}...")
+                    if by_text:
+                        page.wait_for_selector(f"text={selector}", timeout=30000)  # Esperar hasta 30 segundos
+                        element = page.query_selector(f"text={selector}")
+                    else:
+                        page.wait_for_selector(selector, timeout=30000)  # Esperar hasta 30 segundos
+                        element = page.query_selector(selector)
+
+                    if element:
+                        print(f"{description} encontrado, intentando hacer clic...")
+                        element.click(force=True)  # Forzar clic
+                        print(f"Clic en {description} realizado.")
+                    else:
+                        # Buscar dentro de iframes si no se encuentra en la página principal
+                        print(f"{description} no encontrado en la página principal, buscando en iframes...")
+                        for frame in page.frames:
+                            if by_text:
+                                frame_element = frame.query_selector(f"text={selector}")
+                            else:
+                                frame_element = frame.query_selector(selector)
+                                
+                            if frame_element:
+                                frame_element.click(force=True)
+                                print(f"Clic en {description} dentro de iframe realizado.")
+                                return True
+                    return False
+                except Exception as e:
+                    print(f"Error al intentar encontrar o clicar en {description}: {e}")
+                    return False
+
+            # Intentar hacer clic en el botón 'Siguiente'
+            find_and_click('input[id="idSubmit_ProofUp_Redirect"]', "botón 'Siguiente'")
+
+            # Intentar hacer clic en el enlace 'Omitir configuración' usando el texto visible
+            find_and_click("Omitir configuración", "enlace 'Omitir configuración'", by_text=True)
+
             # Verificar si el botón "No permanecer conectado" existe y es visible
             try:
                 if page.query_selector('input[id="idBtn_Back"]'):
@@ -94,8 +79,8 @@ def process_url(connection, ticket_id, url):  # Pasar la conexión como argument
             except Exception as e:
                 print(f"Error al intentar encontrar o clicar el botón 'No permanecer conectado': {e}")
 
-            # Navegar a la URL de extracción de datos
-            page.goto(url)
+            # Navegar a la URL de extracción de datos ingresada por el usuario
+            page.goto(data_page_url)
 
             # Esperar hasta que la red esté inactiva
             page.wait_for_load_state('networkidle')
@@ -107,14 +92,32 @@ def process_url(connection, ticket_id, url):  # Pasar la conexión como argument
             for frame in iframes:
                 record_no_element = frame.query_selector('input[id="oj-collapsible-2-contentrecord_no\\|input"]')
                 
-                if record_no_element:
+                if any([record_no_element]):
                     print("Elementos encontrados en un iframe.")
                     found = True
                     break
 
             if found:
-                # Inicializar la lista para almacenar imágenes
-                imagenes_por_ticket.clear()  # Limpiar la lista antes de almacenar nuevas imágenes
+                # Intentar hacer visibles los elementos si están ocultos
+                for element in [record_no_element]:
+                    if element:
+                        try:
+                            frame.evaluate("el => el.style.display = 'block';", element)
+                            time.sleep(2)  # Esperar un poco para asegurar que el cambio de estilo ha ocurrido
+                        except Exception as e:
+                            print(f"No se pudo modificar el estilo del elemento: {e}")
+
+                record_no = record_no_element.input_value() if record_no_element and record_no_element.is_visible() else "No Visible"
+                
+                print(f"Record No.: {record_no}")
+             
+                # Crear carpeta para guardar las imágenes
+                folder_name = f'{record_no}'
+                if not os.path.exists(folder_name):
+                    os.makedirs(folder_name)
+                    print(f"Carpeta creada: {folder_name}")
+                else:
+                    print(f"Carpeta ya existe: {folder_name}")
 
                 # Hacer scroll en la página para cargar más elementos e imágenes
                 frame.evaluate('window.scrollTo(0, document.body.scrollHeight)')
@@ -122,22 +125,17 @@ def process_url(connection, ticket_id, url):  # Pasar la conexión como argument
 
                 # Extraer imágenes
                 image_elements = frame.query_selector_all('img')
-                for img in image_elements:
+                for index, img in enumerate(image_elements):
+                    image_name = f"image_{index + 1}.jpg"
+                    image_path = os.path.join(folder_name, image_name)
                     try:
-                        # Convertir imagen a Base64
-                        img_data = img.screenshot()
-                        image_base64 = base64.b64encode(img_data).decode('utf-8')
-                        imagenes_por_ticket.append((ticket_id, image_base64))  # Guardar imagen en la lista
-                        print(f"Imagen capturada y guardada en lista para el ticket ID: {ticket_id}")
-
+                        # Intentar guardar la imagen como archivo
+                        img.screenshot(path=image_path)
+                        print(f"Imagen guardada en: {image_path}")
                     except Exception as e:
-                        print(f"Error al convertir o guardar la imagen en Base64: {e}")
+                        print(f"Error al guardar la imagen {image_name}: {e}")
 
-                # Guardar todas las imágenes en la base de datos
-                for ticket_id, image_base64 in imagenes_por_ticket:
-                    save_image_to_db(connection, ticket_id, image_base64)
-
-                print(f"Todas las imágenes se han procesado para el ticket ID: {ticket_id}.")
+                print(f"Todas las imágenes se guardaron con éxito en la carpeta {folder_name}.")
             
             else:
                 print("Uno o más elementos no fueron encontrados en el DOM.")
@@ -148,23 +146,7 @@ def process_url(connection, ticket_id, url):  # Pasar la conexión como argument
     except Exception as e:
         print(f"Error durante la extracción de datos: {e}")
 
-# Ejecutar el proceso de scraping periódicamente
-def main():
-    connection = connect_to_db()
-    if not connection:
-        return
-
-    while True:
-        urls = get_urls_from_db(connection)
-        if urls:
-            for ticket_id, url in urls:
-                process_url(connection, ticket_id, url)  # Pasar la conexión a la función
-        else:
-            print("No se encontraron URLs para procesar.")
-
-        # Esperar 5 minutos antes de la siguiente verificación
-        time.sleep(30000)
-
 # Llamada a la función principal
-main()
+extract_data()
+
 
