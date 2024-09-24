@@ -3,14 +3,12 @@ import time
 import os
 import json
 
-
 with open('config.json', 'r') as config_file:
     config = json.load(config_file)
 
 login_url = config['login']['login_url']
 username = config['login']['username']
 password = config['login']['password']
-
 
 def extract_data():
     try:
@@ -31,6 +29,25 @@ def extract_data():
             page.wait_for_selector('input[name="passwd"]')
             page.fill('input[name="passwd"]', password)
             page.click('input[id="idSIButton9"]')
+
+            # Intentar hacer clic en el botón 'Siguiente'
+            try:
+                print("Esperando el botón 'Siguiente'...")
+                page.wait_for_selector('input[id="idSubmit_ProofUp_Redirect"]', timeout=10000)  # Esperar hasta 10 segundos
+                
+                # Verificar si el botón es visible
+                if page.is_visible('input[id="idSubmit_ProofUp_Redirect"]'):
+                    print("Botón 'Siguiente' visible, intentando hacer clic...")
+
+                    # Intentar hacer clic varias veces
+                    for _ in range(3):
+                        page.click('input[id="idSubmit_ProofUp_Redirect"]', force=True)  # Forzar el clic
+                        time.sleep(1)  # Pausa breve entre intentos
+                    print("Clic en el botón 'Siguiente' realizado.")
+                else:
+                    print("El botón 'Siguiente' no está visible.")
+            except Exception as e:
+                print(f"Error al intentar encontrar o clicar el botón 'Siguiente': {e}")
 
             # Verificar si el botón "No permanecer conectado" existe y es visible
             try:
@@ -111,7 +128,3 @@ def extract_data():
 
 # Llamada a la función principal
 extract_data()
-
-
-
-
