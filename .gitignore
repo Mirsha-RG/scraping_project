@@ -1,0 +1,15 @@
+
+*.log
+*.pot
+*.pyc
+__pycache__
+db.sqlite3
+media
+
+
+# Environments
+.env
+env/
+ENV/
+
+.base_urls
